@@ -392,15 +392,9 @@ try {
         $odbcOK     = $true
         $odbcDetail = $driverNames
     } else {
-        Write-WARN "ODBC Driver 18 for SQL Server NO detectado."
-        Write-Host "  -> Instalar desde: https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server" -ForegroundColor Yellow
-        Write-Host "     Nota: solo es bloqueante en la Fase 6 (conexion a SQL Server)." -ForegroundColor Yellow
-        if ($Install) {
-            if (Confirm-Action "Abrir la URL de descarga en el navegador?") {
-                Start-Process "https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server"
-                Read-Host "  Pulsa ENTER cuando hayas terminado la instalacion del ODBC Driver"
-            }
-        }
+        Write-WARN "ODBC Driver 18 for SQL Server NO detectado en esta maquina (informativo)."
+        Write-Host "  -> Solo necesario en el servidor Windows destino del despliegue." -ForegroundColor Yellow
+        Write-Host "     En desarrollo se usa DATA_SOURCE=excel (Excel local, sin ODBC)." -ForegroundColor Yellow
     }
 } catch {
     Write-WARN "Error al verificar drivers ODBC: $_"
