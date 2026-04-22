@@ -12,6 +12,16 @@ from src.domain.models import ProjectStatus
 from src.domain.project_status import compute_project_health, execution_from_row
 from src.utils.date_utils import int_to_date
 
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_projects(_repo):
+    return _repo.get_available_projects()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_by_project(_repo, project: str):
+    return _repo.get_executions_by_project(project)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -20,6 +30,13 @@ _ESTADO_COLORS = {
     "OK": "#28a745",
     "REGULAR": "#ffc107",
     "CRITICO": "#dc3545",
+}
+
+# Patrones de relleno por estado (accesibilidad para daltonismo)
+_ESTADO_PATTERNS = {
+    "OK": "",
+    "REGULAR": "/",
+    "CRITICO": "x",
 }
 
 
@@ -88,13 +105,17 @@ def _chart_por_hora(df: pd.DataFrame, proyecto: str) -> go.Figure:
         .agg(n=("Id", "count"), xOK=("xEjecutadosOK", "mean"))
         .reset_index()
     )
-    colors = [_ESTADO_COLORS.get(_clasificar_estado(xok, proyecto), "#6c757d")
-              for xok in hourly["xOK"]]
+    estados = hourly["xOK"].apply(lambda x: _clasificar_estado(x, proyecto))
+    colors   = [_ESTADO_COLORS.get(e, "#6c757d") for e in estados]
+    patterns = [_ESTADO_PATTERNS.get(e, "") for e in estados]
 
     fig = go.Figure(go.Bar(
         x=hourly["Hora_ejecucion"],
         y=hourly["n"],
-        marker_color=colors,
+        marker=dict(
+            color=colors,
+            pattern=dict(shape=patterns, solidity=0.6),
+        ),
         hovertemplate="Hora %{x}h<br>Ejecuciones: %{y}<br>% OK medio: %{customdata:.1f}%<extra></extra>",
         customdata=hourly["xOK"],
     ))
@@ -176,7 +197,7 @@ def render(repo: BaseRepository) -> None:
     """Renderiza la Vista 2 — Detalle por proyecto."""
     st.title("Detalle por proyecto")
 
-    proyectos = repo.get_available_projects()
+    proyectos = _load_projects(repo)
     if not proyectos:
         st.error("No hay proyectos disponibles en los datos.")
         return
@@ -186,7 +207,7 @@ def render(repo: BaseRepository) -> None:
     with col_sel:
         proyecto = st.selectbox("Selecciona un proyecto", proyectos)
 
-    df_proyecto = repo.get_executions_by_project(proyecto)
+    df_proyecto = _load_by_project(repo, proyecto)
     if df_proyecto.empty:
         st.warning(f"Sin datos para el proyecto '{proyecto}'.")
         return

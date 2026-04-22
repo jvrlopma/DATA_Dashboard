@@ -7,13 +7,10 @@ Visualiza el estado de los 8 proyectos ETL a partir de la tabla `PWC_Monitorizac
 
 ## Fase actual
 
-**Fase 5 — Vista 3 Operativa diaria** (completada 2026-04-22)
+**Fase 9 — Pulido y validacion** (completada, 2026-04-22)
 
-Siguiente: **Fase 6 — Seguridad + capa SQL Server**
-- Implementar `SqlServerRepository` con pyodbc + SQLAlchemy.
-- Scripts `generate_key.py` y `encrypt_credentials.py`.
-- `docs/SECURITY.md` con manual paso a paso.
-- Requiere instalar ODBC Driver 18 for SQL Server.
+Todas las fases del roadmap completadas excepto la Fase 8 (despliegue), que queda diferida
+hasta que el PM decida la ruta `<INSTALL_PATH>` en el servidor destino.
 
 ## Ruta de desarrollo
 
@@ -23,8 +20,7 @@ C:\Users\Javi\Documents\Proyectos\DATA_Dashboard
 
 ## Ruta de despliegue en servidor
 
-**Pendiente de decision del PM** (se decide antes de la Fase 8).
-Placeholder: `<INSTALL_PATH>\DATA_Dashboard\`
+**Pendiente de decision del PM** (se decide antes de la Fase 8, diferida).
 
 ## Como arrancar en local
 
@@ -32,9 +28,12 @@ Placeholder: `<INSTALL_PATH>\DATA_Dashboard\`
 # Activar el entorno virtual
 .\.venv\Scripts\Activate.ps1
 
-# Arrancar Streamlit
-streamlit run app.py
+# Arrancar Streamlit (modo Excel, desarrollo)
+streamlit run app.py --browser.gatherUsageStats=false
 # -> Abrir http://localhost:8501
+
+# Arrancar el .exe compilado (modo produccion)
+dist\DATA_Dashboard\DATA_Dashboard.exe
 ```
 
 ## Como ejecutar los tests
@@ -46,14 +45,33 @@ pytest
 
 ## Como generar el .exe
 
-Disponible a partir de la **Fase 7**. Ver [docs/BUILD.md](docs/BUILD.md).
+```bat
+build.bat
+```
+
+Genera `dist\DATA_Dashboard\DATA_Dashboard.exe`. Ver [docs/BUILD.md](docs/BUILD.md).
+
+Para empaquetar en .zip:
+
+```powershell
+.\scripts\package_release.ps1 -Version 1.0.0
+```
 
 ## Fuente de datos
 
-- **Desarrollo**: Excel en `data/PWC_Monitorizacion_CdM.xlsx`
-- **Produccion**: SQL Server (variable `DATA_SOURCE=sqlserver`)
+- **Desarrollo**: Excel en `data/PWC_Monitorizacion_CdM.xlsx` (`DATA_SOURCE=excel`, por defecto)
+- **Produccion**: SQL Server (`DATA_SOURCE=sqlserver` + `SECRETS_KEY_PATH` + `CREDENTIALS_PATH`)
 
 Para cambiar de fuente: editar la variable de entorno `DATA_SOURCE` (`excel` | `sqlserver`).
+
+Cifrar credenciales SQL Server (una sola vez en el servidor):
+
+```powershell
+python scripts\generate_key.py --out C:\DATA_secrets\secrets.key
+python scripts\encrypt_credentials.py --key C:\DATA_secrets\secrets.key --out C:\DATA_secrets\credentials.enc
+```
+
+Ver [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Checklist de fases
 
@@ -64,17 +82,18 @@ Para cambiar de fuente: editar la variable de entorno `DATA_SOURCE` (`excel` | `
 - [x] Fase 3  — UI base + Vista 1 (Resumen global)
 - [x] Fase 4  — Vista 2 (Detalle por proyecto)
 - [x] Fase 5  — Vista 3 (Operativa diaria)
-- [ ] Fase 6  — Seguridad + capa SQL Server
-- [ ] Fase 7  — Empaquetado con PyInstaller (onedir)
-- [ ] Fase 8  — Despliegue en Windows Server
-- [ ] Fase 9  — Pulido y validacion final
+- [x] Fase 6  — Seguridad + capa SQL Server
+- [x] Fase 7  — Empaquetado con PyInstaller (onedir)
+- [ ] Fase 8  — Despliegue en Windows Server (diferida; requiere INSTALL_PATH del PM)
+- [x] Fase 9  — Pulido y validacion final
 
 ## Bloqueos / decisiones pendientes
 
 - Ruta `<INSTALL_PATH>` del servidor: pendiente de decision del PM (necesaria antes de la Fase 8).
-- ODBC Driver 18 for SQL Server: pendiente de instalacion (necesario en la Fase 6).
 
 ## Referencias
 
 - [DEVLOG.md](DEVLOG.md) — Bitacora cronologica
 - [PROJECT_SPEC.md](PROJECT_SPEC.md) — Especificacion tecnica completa
+- [docs/SECURITY.md](docs/SECURITY.md) — Manual de credenciales cifradas
+- [docs/BUILD.md](docs/BUILD.md) — Ciclo completo de build y packaging

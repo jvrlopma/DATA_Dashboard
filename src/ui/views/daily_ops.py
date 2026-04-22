@@ -11,12 +11,23 @@ from src.core.data_access.base_repository import BaseRepository
 from src.domain.models import ALL_PROJECTS, PROYECTOS_GRUPO_A
 from src.utils.date_utils import int_to_date
 
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_all(_repo):
+    return _repo.get_all_executions()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_range(_repo, start, end):
+    return _repo.get_executions_in_range(start, end)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-_STATUS_COLORS = {"OK": "#28a745", "REGULAR": "#ffc107", "CRITICO": "#dc3545"}
-_STATUS_ICONS  = {"OK": "✅", "REGULAR": "⚠️", "CRITICO": "❌"}
+_STATUS_COLORS   = {"OK": "#28a745", "REGULAR": "#ffc107", "CRITICO": "#dc3545"}
+_STATUS_ICONS    = {"OK": "✅", "REGULAR": "⚠️", "CRITICO": "❌"}
+_STATUS_PATTERNS = {"OK": "", "REGULAR": "/", "CRITICO": "x"}
 
 
 def _clasificar_estado(xok: float, proyecto: str) -> str:
@@ -76,6 +87,8 @@ def _gantt(df: pd.DataFrame, fecha_sel: date) -> go.Figure:
         y="proyecto",
         color="Estado",
         color_discrete_map=_STATUS_COLORS,
+        pattern_shape="Estado",
+        pattern_shape_map=_STATUS_PATTERNS,
         hover_data={"xEjecutadosOK": ":.1f", "nTotalEjecuciones": True,
                     "Hora_fmt": True, "Estado": True,
                     "Inicio": False, "Fin": False},
@@ -141,21 +154,13 @@ def _tabla_inactividad(df_all: pd.DataFrame, now: datetime, umbral_h: int) -> pd
     """Construye una tabla con el estado de actividad de cada proyecto."""
     limite = now - timedelta(hours=umbral_h)
 
+    # Construccion vectorizada de datetime (evita apply fila a fila en 10k+ filas)
+    fecha_str = df_all["nFecha_ejecucion"].astype(int).astype(str)
+    hora_str  = df_all["Hora_ejecucion"].astype(int).astype(str).str.zfill(2)
+    min_str   = df_all["Minuto_ejecucion"].astype(int).astype(str).str.zfill(2)
+
     last = (
-        df_all.assign(
-            dt=df_all.apply(
-                lambda r: datetime(
-                    *[int(x) for x in [
-                        str(int(r["nFecha_ejecucion"]))[:4],
-                        str(int(r["nFecha_ejecucion"]))[4:6],
-                        str(int(r["nFecha_ejecucion"]))[6:8],
-                        int(r["Hora_ejecucion"]),
-                        int(r["Minuto_ejecucion"]),
-                    ]]
-                ),
-                axis=1,
-            )
-        )
+        df_all.assign(dt=pd.to_datetime(fecha_str + hora_str + min_str, format="%Y%m%d%H%M"))
         .sort_values("dt", ascending=False)
         .groupby("proyecto", as_index=False)
         .first()[["proyecto", "dt", "xEjecutadosOK"]]
@@ -196,7 +201,7 @@ def render(repo: BaseRepository) -> None:
     """Renderiza la Vista 3 — Operativa diaria."""
     st.title("Operativa diaria")
 
-    df_all = repo.get_all_executions()
+    df_all = _load_all(repo)
     fecha_max = int_to_date(int(df_all["nFecha_ejecucion"].max()))
     now = datetime.now()
 
@@ -217,7 +222,7 @@ def render(repo: BaseRepository) -> None:
     st.divider()
 
     # --- Datos del dia seleccionado ---
-    df_dia = repo.get_executions_in_range(fecha_sel, fecha_sel)
+    df_dia = _load_range(repo, fecha_sel, fecha_sel)
 
     st.subheader(f"Timeline — {fecha_sel.strftime('%d/%m/%Y')}")
 

@@ -14,6 +14,16 @@ from src.domain.project_status import (
     get_all_project_health,
 )
 
+# TTL 5 min; el prefijo _ en _repo excluye el objeto del hash de cache
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_last(_repo):
+    return _repo.get_last_execution_per_project()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_all(_repo):
+    return _repo.get_all_executions()
+
 # ---------------------------------------------------------------------------
 # Constantes visuales
 # ---------------------------------------------------------------------------
@@ -154,7 +164,7 @@ def render(repo: BaseRepository) -> None:
     st.title("Resumen global — Estado ETL")
 
     # --- Datos ---
-    df_last = repo.get_last_execution_per_project()
+    df_last = _load_last(repo)
     now = datetime.now()
 
     last_by_project = {}
@@ -210,7 +220,7 @@ def render(repo: BaseRepository) -> None:
     # --- Grafico de evolucion ---
     st.subheader("Evolucion del % OK")
     tab7, tab30, tab90 = st.tabs(["Ultimos 7 dias", "Ultimos 30 dias", "Ultimos 90 dias"])
-    df_all = repo.get_all_executions()
+    df_all = _load_all(repo)
 
     with tab7:
         st.plotly_chart(_trend_chart(df_all, 7), use_container_width=True)
