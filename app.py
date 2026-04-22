@@ -1,15 +1,13 @@
-"""Punto de entrada de DATA_Dashboard (Streamlit).
+"""Punto de entrada de DATA_Dashboard (Streamlit)."""
 
-Configura la pagina, carga el repositorio y enruta a la vista seleccionada.
-"""
-
+import os
 import streamlit as st
 
 from src.core.data_access.factory import get_repository
-from src.ui.styles import inject_css
+from src.ui.styles import inject_css, set_dark, apply_plotly_theme
 
 # ---------------------------------------------------------------------------
-# Configuracion de pagina (debe ser la primera llamada a Streamlit)
+# Configuracion de pagina (primera llamada a Streamlit)
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="DATA Dashboard — Aqualia",
@@ -18,39 +16,65 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ---------------------------------------------------------------------------
+# Estado de tema
+# ---------------------------------------------------------------------------
+if "dark" not in st.session_state:
+    st.session_state.dark = False
+
+set_dark(st.session_state.dark)
+apply_plotly_theme()
 inject_css()
 
 # ---------------------------------------------------------------------------
-# Carga del repositorio (cacheada para no releer el Excel en cada interaccion)
+# Repositorio de datos
 # ---------------------------------------------------------------------------
 @st.cache_resource
 def load_repository():
-    """Carga y devuelve el repositorio de datos (singleton por sesion)."""
     return get_repository()
-
 
 repo = load_repository()
 
 # ---------------------------------------------------------------------------
-# Navegacion lateral
+# Sidebar
 # ---------------------------------------------------------------------------
-import os
-
 with st.sidebar:
     logo_path = os.path.join(os.path.dirname(__file__), "assets", "aqualia-logo.png")
     if os.path.exists(logo_path):
         st.image(logo_path, width=140)
     else:
         st.markdown("**DATA Dashboard**")
-    st.caption("Departamento de DATA — Aqualia TI")
+
+    st.markdown(
+        f'<p style="font-size:10px;font-family:\'JetBrains Mono\',monospace;'
+        f'text-transform:uppercase;letter-spacing:0.08em;margin:4px 0 0;'
+        f'color:{"#8890a8" if st.session_state.dark else "#8a909a"}">Aqualia · DATA</p>',
+        unsafe_allow_html=True,
+    )
+
     st.divider()
 
     vista = st.radio(
-        "Navegacion",
+        "Navegación",
         options=["Resumen global", "Detalle por proyecto", "Operativa diaria"],
         index=0,
         label_visibility="collapsed",
     )
+
+    st.divider()
+
+    # Toggle de tema claro/oscuro
+    col_icon, col_btn = st.columns([1, 3])
+    with col_icon:
+        st.markdown(
+            f'<div style="font-size:20px;padding-top:4px">{"🌙" if not st.session_state.dark else "☀️"}</div>',
+            unsafe_allow_html=True,
+        )
+    with col_btn:
+        label = "Tema oscuro" if not st.session_state.dark else "Tema claro"
+        if st.button(label, use_container_width=True):
+            st.session_state.dark = not st.session_state.dark
+            st.rerun()
 
     st.divider()
     st.caption("Fuente: PWC_Monitorizacion_CdM")
