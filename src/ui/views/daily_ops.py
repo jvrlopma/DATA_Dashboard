@@ -1,4 +1,4 @@
-"""Vista 3 — Operativa diaria: timeline del dia y deteccion de proyectos inactivos."""
+"""Vista 3 — Operativa diaria: timeline del día y detección de inactividad."""
 
 from datetime import date, datetime, timedelta
 
@@ -10,7 +10,7 @@ import streamlit as st
 from src.core.data_access.base_repository import BaseRepository
 from src.domain.models import ALL_PROJECTS, PROYECTOS_GRUPO_A
 from src.utils.date_utils import int_to_date
-from src.ui.styles import C, day_kpis_html, section_title_html
+from src.ui.styles import C, day_kpi_strip_html, section_title_html, badge_html
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -22,12 +22,8 @@ def _load_all(_repo):
 def _load_range(_repo, start, end):
     return _repo.get_executions_in_range(start, end)
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 _STATUS_COLORS   = {"OK": C["ok"], "REGULAR": C["warn"], "CRITICO": C["crit"]}
-_STATUS_ICONS    = {"OK": "✅", "REGULAR": "⚠️", "CRITICO": "❌"}
 _STATUS_PATTERNS = {"OK": "", "REGULAR": "/", "CRITICO": "x"}
 
 
@@ -42,7 +38,6 @@ def _clasificar_estado(xok: float, proyecto: str) -> str:
 
 
 def _parse_dt(s) -> datetime | None:
-    """Parsea un string datetime del Excel; devuelve None si es nulo/invalido."""
     if pd.isna(s) or not s:
         return None
     try:
@@ -52,11 +47,10 @@ def _parse_dt(s) -> datetime | None:
 
 
 def _enrich(df: pd.DataFrame) -> pd.DataFrame:
-    """Anade columnas derivadas utiles para la vista."""
     df = df.copy()
-    df["Estado"] = df.apply(lambda r: _clasificar_estado(r["xEjecutadosOK"], r["proyecto"]), axis=1)
-    df["Inicio"] = df["dFech_Ini_Carga"].apply(_parse_dt)
-    df["Fin"]    = df["dFech_Fin_Carga"].apply(_parse_dt)
+    df["Estado"]   = df.apply(lambda r: _clasificar_estado(r["xEjecutadosOK"], r["proyecto"]), axis=1)
+    df["Inicio"]   = df["dFech_Ini_Carga"].apply(_parse_dt)
+    df["Fin"]      = df["dFech_Fin_Carga"].apply(_parse_dt)
     df["Hora_fmt"] = df.apply(
         lambda r: f"{int(r['Hora_ejecucion']):02d}:{int(r['Minuto_ejecucion']):02d}", axis=1
     )
@@ -64,60 +58,41 @@ def _enrich(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Grafico Gantt
+# Gantt
 # ---------------------------------------------------------------------------
 
 def _gantt(df: pd.DataFrame, fecha_sel: date) -> go.Figure:
-    """Gantt simplificado: cada ejecucion como barra de duracion real."""
     df_gantt = df.dropna(subset=["Inicio", "Fin"]).copy()
-
     if df_gantt.empty:
-        # Fallback: puntos sin duracion
         return _gantt_puntos(df, fecha_sel)
 
-    # Asegurar que Fin >= Inicio (minimo 1 minuto para visibilidad)
     df_gantt["Fin"] = df_gantt.apply(
         lambda r: r["Fin"] if r["Fin"] > r["Inicio"] else r["Inicio"] + timedelta(minutes=1),
         axis=1,
     )
-
     fig = px.timeline(
-        df_gantt,
-        x_start="Inicio",
-        x_end="Fin",
-        y="proyecto",
-        color="Estado",
-        color_discrete_map=_STATUS_COLORS,
-        pattern_shape="Estado",
-        pattern_shape_map=_STATUS_PATTERNS,
+        df_gantt, x_start="Inicio", x_end="Fin", y="proyecto",
+        color="Estado", color_discrete_map=_STATUS_COLORS,
+        pattern_shape="Estado", pattern_shape_map=_STATUS_PATTERNS,
         hover_data={"xEjecutadosOK": ":.1f", "nTotalEjecuciones": True,
-                    "Hora_fmt": True, "Estado": True,
-                    "Inicio": False, "Fin": False},
+                    "Hora_fmt": True, "Estado": True, "Inicio": False, "Fin": False},
         labels={"proyecto": "Proyecto", "xEjecutadosOK": "% OK",
                 "nTotalEjecuciones": "Total ejec.", "Hora_fmt": "Hora"},
         category_orders={"proyecto": sorted(ALL_PROJECTS)},
     )
-
-    # Rango X = dia completo seleccionado
     dia_ini = datetime(fecha_sel.year, fecha_sel.month, fecha_sel.day, 0, 0)
     dia_fin = datetime(fecha_sel.year, fecha_sel.month, fecha_sel.day, 23, 59)
     fig.update_xaxes(range=[dia_ini, dia_fin], tickformat="%H:%M")
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(
-        height=320,
-        margin=dict(l=0, r=10, t=10, b=0),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        height=360, margin=dict(l=0, r=10, t=8, b=0),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        xaxis_title="Hora del día",
-        yaxis_title="",
-        font=dict(family="Space Grotesk, sans-serif", size=12),
+        xaxis_title="Hora del día", yaxis_title="",
     )
     return fig
 
 
 def _gantt_puntos(df: pd.DataFrame, fecha_sel: date) -> go.Figure:
-    """Fallback: scatter de puntos por hora cuando no hay duraciones."""
     fig = go.Figure()
     for estado, color in _STATUS_COLORS.items():
         sub = df[df["Estado"] == estado]
@@ -125,39 +100,28 @@ def _gantt_puntos(df: pd.DataFrame, fecha_sel: date) -> go.Figure:
             continue
         x_vals = sub["Hora_ejecucion"] + sub["Minuto_ejecucion"] / 60
         fig.add_trace(go.Scatter(
-            x=x_vals, y=sub["proyecto"], mode="markers",
-            name=estado,
+            x=x_vals, y=sub["proyecto"], mode="markers", name=estado,
             marker=dict(color=color, size=12,
                         symbol="circle" if estado == "OK" else
                                "triangle-up" if estado == "REGULAR" else "x"),
-            hovertemplate=(
-                "%{y}<br>Hora: %{customdata[0]}<br>"
-                "% OK: %{customdata[1]:.1f}%<br>"
-                "Total ejec.: %{customdata[2]}<extra></extra>"
-            ),
+            hovertemplate="%{y}<br>Hora: %{customdata[0]}<br>% OK: %{customdata[1]:.1f}%<extra></extra>",
             customdata=sub[["Hora_fmt", "xEjecutadosOK", "nTotalEjecuciones"]].values,
         ))
     fig.update_layout(
-        xaxis=dict(range=[0, 24], dtick=2, tickformat="%H:00",
-                   title="Hora del día", gridcolor=C["grid"]),
-        yaxis=dict(title="", gridcolor=C["grid"], categoryorder="category ascending"),
-        height=320, plot_bgcolor="white", paper_bgcolor="white",
-        margin=dict(l=0, r=10, t=10, b=0),
+        xaxis=dict(range=[0, 24], dtick=2, title="Hora del día"),
+        yaxis=dict(title="", categoryorder="category ascending"),
+        height=360, margin=dict(l=0, r=10, t=8, b=0),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        font=dict(family="Space Grotesk, sans-serif", size=12),
     )
     return fig
 
 
 # ---------------------------------------------------------------------------
-# Deteccion de inactividad
+# Tabla de inactividad
 # ---------------------------------------------------------------------------
 
 def _tabla_inactividad(df_all: pd.DataFrame, now: datetime, umbral_h: int) -> pd.DataFrame:
-    """Construye una tabla con el estado de actividad de cada proyecto."""
     limite = now - timedelta(hours=umbral_h)
-
-    # Construccion vectorizada de datetime (evita apply fila a fila en 10k+ filas)
     fecha_str = df_all["nFecha_ejecucion"].astype(int).astype(str)
     hora_str  = df_all["Hora_ejecucion"].astype(int).astype(str).str.zfill(2)
     min_str   = df_all["Minuto_ejecucion"].astype(int).astype(str).str.zfill(2)
@@ -165,8 +129,8 @@ def _tabla_inactividad(df_all: pd.DataFrame, now: datetime, umbral_h: int) -> pd
     last = (
         df_all.assign(dt=pd.to_datetime(fecha_str + hora_str + min_str, format="%Y%m%d%H%M"))
         .sort_values("dt", ascending=False)
-        .groupby("proyecto", as_index=False)
-        .first()[["proyecto", "dt", "xEjecutadosOK"]]
+        .groupby("proyecto", as_index=False).first()
+        [["proyecto", "dt", "xEjecutadosOK"]]
     )
 
     rows = []
@@ -174,25 +138,21 @@ def _tabla_inactividad(df_all: pd.DataFrame, now: datetime, umbral_h: int) -> pd
         fila = last[last["proyecto"] == proyecto]
         if fila.empty:
             rows.append({
-                "Proyecto": proyecto,
-                "Ultima ejecucion": "Sin datos",
-                "Horas desde ult. ejec.": None,
-                "Estado actividad": "⚫ Sin datos",
-                "% OK (ult.)": None,
+                "Proyecto": proyecto, "Última ejecución": "Sin datos",
+                "Horas transcurridas": None, "Estado": "SIN DATOS", "% OK (últ.)": None,
             })
         else:
-            dt = fila.iloc[0]["dt"]
+            dt  = fila.iloc[0]["dt"]
             xok = fila.iloc[0]["xEjecutadosOK"]
             horas = (now - dt).total_seconds() / 3600
             activo = dt > limite
             rows.append({
                 "Proyecto": proyecto,
-                "Ultima ejecucion": dt.strftime("%d/%m/%Y %H:%M"),
-                "Horas desde ult. ejec.": round(horas, 1),
-                "Estado actividad": "✅ Activo" if activo else "❌ Inactivo",
-                "% OK (ult.)": round(xok, 2),
+                "Última ejecución": dt.strftime("%d/%m/%Y %H:%M"),
+                "Horas transcurridas": round(horas, 1),
+                "Estado": "ACTIVO" if activo else "INACTIVO",
+                "% OK (últ.)": round(xok, 2),
             })
-
     return pd.DataFrame(rows)
 
 
@@ -201,52 +161,52 @@ def _tabla_inactividad(df_all: pd.DataFrame, now: datetime, umbral_h: int) -> pd
 # ---------------------------------------------------------------------------
 
 def render(repo: BaseRepository) -> None:
-    """Renderiza la Vista 3 — Operativa diaria."""
-    st.markdown('<h2 style="margin-bottom:4px;font-size:20px;font-weight:600">Operativa diaria</h2>', unsafe_allow_html=True)
-
+    now = datetime.now()
     df_all = _load_all(repo)
     fecha_max = int_to_date(int(df_all["nFecha_ejecucion"].max()))
-    now = datetime.now()
 
-    # --- Controles ---
+    st.markdown(
+        f'<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;'
+        f'font-weight:600;color:{C["text"]};letter-spacing:-0.02em;margin:0 0 4px">Operativa diaria</h2>'
+        f'<p style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:{C["text3"]};margin:0 0 16px">'
+        f'Vista operacional · ejecuciones del día y análisis de inactividad</p>',
+        unsafe_allow_html=True,
+    )
+
+    # Controles
     ctrl1, ctrl2 = st.columns([2, 2])
     with ctrl1:
         fecha_sel = st.date_input(
-            "Fecha a visualizar",
-            value=fecha_max,
+            "Fecha", value=fecha_max,
             min_value=int_to_date(int(df_all["nFecha_ejecucion"].min())),
             max_value=fecha_max,
         )
     with ctrl2:
-        umbral_h = st.slider(
-            "Umbral de inactividad (horas)", min_value=1, max_value=72, value=24, step=1
-        )
+        umbral_h = st.slider("Umbral de inactividad (h)", 1, 72, 24, 1)
 
-    st.divider()
-
-    # --- Datos del dia seleccionado ---
+    # Datos del día
     df_dia = _load_range(repo, fecha_sel, fecha_sel)
 
-    st.markdown(section_title_html(f"Timeline — {fecha_sel.strftime('%d/%m/%Y')}"), unsafe_allow_html=True)
+    st.markdown(section_title_html(f"Ejecuciones del día · {fecha_sel.strftime('%d/%m/%Y')}"), unsafe_allow_html=True)
 
     if df_dia.empty:
         st.warning(f"No hay ejecuciones registradas el {fecha_sel.strftime('%d/%m/%Y')}.")
     else:
         df_dia = _enrich(df_dia)
 
-        # KPIs del dia
-        st.markdown(day_kpis_html(
-            len(df_dia),
-            df_dia["proyecto"].nunique(),
-            df_dia["xEjecutadosOK"].mean(),
-            int(df_dia["nTotalEjecuciones"].sum()),
+        # KPI strip
+        st.markdown(day_kpi_strip_html(
+            ejecuciones=len(df_dia),
+            proyectos=df_dia["proyecto"].nunique(),
+            total_proy=len(ALL_PROJECTS),
+            pct_ok=df_dia["xEjecutadosOK"].mean(),
+            total_proc=int(df_dia["nTotalEjecuciones"].sum()),
         ), unsafe_allow_html=True)
 
         # Gantt
         st.plotly_chart(_gantt(df_dia, fecha_sel), use_container_width=True)
 
-        # Tabla resumen del dia
-        with st.expander("Resumen de ejecuciones del dia"):
+        with st.expander("Resumen de ejecuciones del día"):
             resumen = (
                 df_dia.groupby("proyecto")
                 .agg(
@@ -257,37 +217,31 @@ def render(repo: BaseRepository) -> None:
                 )
                 .reset_index()
                 .rename(columns={
-                    "proyecto": "Proyecto",
-                    "xOK_medio": "% OK medio",
-                    "Total_proc": "Total procesos",
-                    "Errores": "Procesos con error",
+                    "proyecto": "Proyecto", "xOK_medio": "% OK medio",
+                    "Total_proc": "Total procesos", "Errores": "Procesos con error",
                 })
             )
             resumen["% OK medio"] = resumen["% OK medio"].round(2)
             st.dataframe(resumen, use_container_width=True, hide_index=True,
                          column_config={"% OK medio": st.column_config.NumberColumn(format="%.1f %%")})
 
-    st.divider()
-
-    # --- Deteccion de inactividad ---
-    st.markdown(section_title_html(f"Detección de inactividad — umbral: {umbral_h} h"), unsafe_allow_html=True)
+    # Inactividad
+    st.markdown(section_title_html(f"Análisis de inactividad · umbral {umbral_h} h"), unsafe_allow_html=True)
     tabla_act = _tabla_inactividad(df_all, now, umbral_h)
 
-    inactivos = tabla_act[tabla_act["Estado actividad"].str.startswith("❌")]
+    inactivos = tabla_act[tabla_act["Estado"] == "INACTIVO"]
     if not inactivos.empty:
         st.error(
-            f"{len(inactivos)} proyecto(s) sin ejecucion en las ultimas {umbral_h} horas: "
+            f"{len(inactivos)} proyecto(s) sin ejecución en las últimas {umbral_h} h: "
             + ", ".join(inactivos["Proyecto"].tolist())
         )
     else:
-        st.success(f"Todos los proyectos han ejecutado en las ultimas {umbral_h} horas.")
+        st.success(f"Todos los proyectos han ejecutado en las últimas {umbral_h} h.")
 
     st.dataframe(
-        tabla_act,
-        use_container_width=True,
-        hide_index=True,
+        tabla_act, use_container_width=True, hide_index=True,
         column_config={
-            "% OK (ult.)": st.column_config.NumberColumn(format="%.2f %%"),
-            "Horas desde ult. ejec.": st.column_config.NumberColumn(format="%.1f h"),
+            "% OK (últ.)": st.column_config.NumberColumn(format="%.2f %%"),
+            "Horas transcurridas": st.column_config.NumberColumn(format="%.1f h"),
         },
     )
