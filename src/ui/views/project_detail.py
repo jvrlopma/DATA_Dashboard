@@ -13,17 +13,16 @@ from src.utils.date_utils import int_to_date
 from src.ui.styles import C, badge_html, mini_grid_html, panel_html, section_title_html
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def _load_projects(_repo):
     return _repo.get_available_projects()
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def _load_by_project(_repo, project: str):
     return _repo.get_executions_by_project(project)
 
 
-_ESTADO_COLORS  = {"OK": C["ok"], "REGULAR": C["warn"], "CRITICO": C["crit"]}
 _ESTADO_PATTERNS = {"OK": "", "REGULAR": "/", "CRITICO": "x"}
 
 
@@ -85,7 +84,8 @@ def _chart_por_hora(df: pd.DataFrame, proyecto: str) -> go.Figure:
         .reset_index()
     )
     estados  = hourly["xOK"].apply(lambda x: _clasificar_estado(x, proyecto))
-    colors   = [_ESTADO_COLORS.get(e, C["none"]) for e in estados]
+    estado_colors = {"OK": C["ok"], "REGULAR": C["warn"], "CRITICO": C["crit"]}
+    colors   = [estado_colors.get(e, C["none"]) for e in estados]
     patterns = [_ESTADO_PATTERNS.get(e, "") for e in estados]
 
     fig = go.Figure(go.Bar(
@@ -173,10 +173,10 @@ def _panel_ultima_ejecucion(row: pd.Series, proyecto: str) -> None:
 
 def render(repo: BaseRepository) -> None:
     st.markdown(
-        f'<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;'
-        f'font-weight:600;color:{C["text"]};letter-spacing:-0.02em;margin:0 0 4px">Detalle por proyecto</h2>'
-        f'<p style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:{C["text3"]};margin:0 0 16px">'
-        f'Vista de análisis · última ejecución, evolución e histórico</p>',
+        '<h2 style="font-family:Inter,sans-serif;font-size:22px;'
+        'font-weight:600;color:var(--dd-text);letter-spacing:-0.02em;margin:0 0 4px">Detalle por proyecto</h2>'
+        '<p style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:var(--dd-text3);margin:0 0 16px">'
+        'Vista de an&#225;lisis · &#250;ltima ejecuci&#243;n, evoluci&#243;n e hist&#243;rico</p>',
         unsafe_allow_html=True,
     )
 

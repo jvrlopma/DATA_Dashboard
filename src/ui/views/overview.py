@@ -11,55 +11,80 @@ from src.domain.models import ALL_PROJECTS, PROYECTOS_GRUPO_A, ProjectStatus
 from src.domain.project_status import execution_from_row, get_all_project_health
 from src.ui.styles import (
     C, badge_html, kpi_strip_html, project_card_html,
-    attention_items_html, panel_html, section_title_html,
+    attention_items_html, section_title_html,
 )
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def _load_last(_repo):
     return _repo.get_last_execution_per_project()
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def _load_all(_repo):
     return _repo.get_all_executions()
 
 
-# ---------------------------------------------------------------------------
-# Gráfico de evolución
-# ---------------------------------------------------------------------------
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_gis(_repo):
+    return _repo.get_executions_by_project("Aqualia_GIS")
 
-def _trend_chart(df_all: pd.DataFrame, days: int) -> go.Figure:
+
+# ---------------------------------------------------------------------------
+# Clasificador de estado (idéntico al de daily_ops/project_detail)
+# ---------------------------------------------------------------------------
+def _clasificar(xok: float, proyecto: str) -> str:
+    if proyecto in PROYECTOS_GRUPO_A:
+        return "CRITICO" if xok < 100.0 else "OK"
+    if xok >= 90.0:
+        return "OK"
+    if xok >= 80.0:
+        return "REGULAR"
+    return "CRITICO"
+
+
+# ---------------------------------------------------------------------------
+# Gráfico: ejecuciones por estado por día (stacked bar)
+# ---------------------------------------------------------------------------
+def _status_bar_chart(df_all: pd.DataFrame, days: int) -> go.Figure:
     max_date = df_all["nFecha_ejecucion"].max()
     cutoff = int((
         datetime.strptime(str(max_date), "%Y%m%d") - timedelta(days=days)
     ).strftime("%Y%m%d"))
 
     df = df_all[df_all["nFecha_ejecucion"] >= cutoff].copy()
-    daily = (
-        df.groupby("nFecha_ejecucion")["xEjecutadosOK"]
-        .mean().reset_index()
-        .rename(columns={"nFecha_ejecucion": "fecha", "xEjecutadosOK": "pct_ok"})
+    df["Estado"] = df.apply(
+        lambda r: _clasificar(r["xEjecutadosOK"], r["proyecto"]), axis=1
     )
-    daily["fecha_dt"] = pd.to_datetime(daily["fecha"].astype(str), format="%Y%m%d")
-    daily = daily.sort_values("fecha_dt")
+    df["fecha_dt"] = pd.to_datetime(
+        df["nFecha_ejecucion"].astype(str), format="%Y%m%d"
+    )
+
+    counts = (
+        df.groupby(["fecha_dt", "Estado"])
+        .size()
+        .reset_index(name="n")
+    )
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=daily["fecha_dt"], y=daily["pct_ok"],
-        mode="lines+markers", name="% OK medio",
-        line=dict(color=C["accent"], width=2),
-        marker=dict(size=4, color=C["accent"]),
-        hovertemplate="%{x|%d/%m/%Y}<br>% OK: %{y:.1f}%<extra></extra>",
-    ))
-    fig.add_hline(y=90, line_dash="dot", line_color=C["warn"],
-                  annotation_text="OBJETIVO · 90%", annotation_position="right")
-    fig.add_hline(y=80, line_dash="dot", line_color=C["crit"],
-                  annotation_text="UMBRAL CRÍTICO · 80%", annotation_position="right")
+    palette = {"OK": C["ok"], "REGULAR": C["warn"], "CRITICO": C["crit"]}
+    for estado in ["CRITICO", "REGULAR", "OK"]:
+        sub = counts[counts["Estado"] == estado].sort_values("fecha_dt")
+        fig.add_trace(go.Bar(
+            x=sub["fecha_dt"], y=sub["n"],
+            name=estado,
+            marker_color=palette[estado],
+            hovertemplate="%{x|%d/%m/%Y}<br>" + estado + ": %{y} ejec.<extra></extra>",
+        ))
+
     fig.update_layout(
-        yaxis=dict(range=[0, 105], ticksuffix=" %"),
-        height=240, showlegend=False,
-        margin=dict(l=48, r=80, t=16, b=40),
+        barmode="stack",
+        height=400,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        xaxis=dict(tickformat="%d/%m"),
+        yaxis=dict(title="Ejecuciones"),
+        margin=dict(l=44, r=12, t=8, b=32),
     )
     return fig
 
@@ -70,9 +95,10 @@ def _trend_chart(df_all: pd.DataFrame, days: int) -> go.Figure:
 
 def render(repo: BaseRepository) -> None:
     df_last = _load_last(repo)
+    df_gis = _load_gis(repo)
     now = datetime.now()
 
-    healths = get_all_project_health(df_last, now)
+    healths = get_all_project_health(df_last, now, df_gis=df_gis)
 
     col_ok   = sum(1 for h in healths if not h.sin_datos_recientes and h.estado == ProjectStatus.OK)
     col_warn = sum(1 for h in healths if not h.sin_datos_recientes and h.estado == ProjectStatus.REGULAR)
@@ -80,9 +106,9 @@ def render(repo: BaseRepository) -> None:
 
     # Cabecera
     st.markdown(
-        f'<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;'
-        f'font-weight:600;color:{C["text"]};letter-spacing:-0.02em;margin:0 0 4px">Resumen global</h2>'
-        f'<p style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:{C["text3"]};margin:0 0 16px">'
+        '<h2 style="font-family:Inter,sans-serif;font-size:22px;'
+        'font-weight:600;color:var(--dd-text);letter-spacing:-0.02em;margin:0 0 4px">Resumen global</h2>'
+        '<p style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:var(--dd-text3);margin:0 0 16px">'
         f'Vista de mando · {now.strftime("%d/%m/%Y")} · {now.strftime("%H:%M")}</p>',
         unsafe_allow_html=True,
     )
@@ -114,10 +140,10 @@ def render(repo: BaseRepository) -> None:
                 unsafe_allow_html=True,
             )
 
-    # Panel inferior: atención + evolución (dos columnas)
+    # Panel inferior: atención + gráfico de actividad
     problemas = [h for h in healths if h.sin_datos_recientes or h.estado != ProjectStatus.OK]
 
-    col_att, col_chart = st.columns([1, 1.2])
+    col_att, col_chart = st.columns([1, 1.4])
 
     with col_att:
         attn_items = []
@@ -129,22 +155,15 @@ def render(repo: BaseRepository) -> None:
             reason = "Sin datos recientes" if h.sin_datos_recientes else f"% OK: {xok_str}"
             attn_items.append((bdg, h.proyecto, reason, dt_str))
 
-        body = attention_items_html(attn_items)
-        # Extraer el contenido interno (sin el wrapper .dd) para el panel
-        inner = body.replace('<div class="dd">', "").rstrip("</div>").rstrip()
-        st.markdown(panel_html(
-            "Requieren atención",
-            f"{len(problemas)} proyectos",
-            inner,
-            no_pad=True,
-        ), unsafe_allow_html=True)
+        # attention_items_html ya genera el panel completo con cabecera
+        st.markdown(attention_items_html(attn_items), unsafe_allow_html=True)
 
     with col_chart:
         df_all = _load_all(repo)
         tab7, tab30, tab90 = st.tabs(["7d", "30d", "90d"])
         with tab7:
-            st.plotly_chart(_trend_chart(df_all, 7), use_container_width=True)
+            st.plotly_chart(_status_bar_chart(df_all, 7), use_container_width=True)
         with tab30:
-            st.plotly_chart(_trend_chart(df_all, 30), use_container_width=True)
+            st.plotly_chart(_status_bar_chart(df_all, 30), use_container_width=True)
         with tab90:
-            st.plotly_chart(_trend_chart(df_all, 90), use_container_width=True)
+            st.plotly_chart(_status_bar_chart(df_all, 90), use_container_width=True)

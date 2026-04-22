@@ -13,17 +13,16 @@ from src.utils.date_utils import int_to_date
 from src.ui.styles import C, day_kpi_strip_html, section_title_html, badge_html
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def _load_all(_repo):
     return _repo.get_all_executions()
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def _load_range(_repo, start, end):
     return _repo.get_executions_in_range(start, end)
 
 
-_STATUS_COLORS   = {"OK": C["ok"], "REGULAR": C["warn"], "CRITICO": C["crit"]}
 _STATUS_PATTERNS = {"OK": "", "REGULAR": "/", "CRITICO": "x"}
 
 
@@ -72,7 +71,7 @@ def _gantt(df: pd.DataFrame, fecha_sel: date) -> go.Figure:
     )
     fig = px.timeline(
         df_gantt, x_start="Inicio", x_end="Fin", y="proyecto",
-        color="Estado", color_discrete_map=_STATUS_COLORS,
+        color="Estado", color_discrete_map={"OK": C["ok"], "REGULAR": C["warn"], "CRITICO": C["crit"]},
         pattern_shape="Estado", pattern_shape_map=_STATUS_PATTERNS,
         hover_data={"xEjecutadosOK": ":.1f", "nTotalEjecuciones": True,
                     "Hora_fmt": True, "Estado": True, "Inicio": False, "Fin": False},
@@ -94,7 +93,7 @@ def _gantt(df: pd.DataFrame, fecha_sel: date) -> go.Figure:
 
 def _gantt_puntos(df: pd.DataFrame, fecha_sel: date) -> go.Figure:
     fig = go.Figure()
-    for estado, color in _STATUS_COLORS.items():
+    for estado, color in {"OK": C["ok"], "REGULAR": C["warn"], "CRITICO": C["crit"]}.items():
         sub = df[df["Estado"] == estado]
         if sub.empty:
             continue
@@ -166,10 +165,10 @@ def render(repo: BaseRepository) -> None:
     fecha_max = int_to_date(int(df_all["nFecha_ejecucion"].max()))
 
     st.markdown(
-        f'<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;'
-        f'font-weight:600;color:{C["text"]};letter-spacing:-0.02em;margin:0 0 4px">Operativa diaria</h2>'
-        f'<p style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:{C["text3"]};margin:0 0 16px">'
-        f'Vista operacional · ejecuciones del día y análisis de inactividad</p>',
+        '<h2 style="font-family:Inter,sans-serif;font-size:22px;'
+        'font-weight:600;color:var(--dd-text);letter-spacing:-0.02em;margin:0 0 4px">Operativa diaria</h2>'
+        '<p style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:var(--dd-text3);margin:0 0 16px">'
+        'Vista operacional · ejecuciones del d&#237;a y an&#225;lisis de inactividad</p>',
         unsafe_allow_html=True,
     )
 

@@ -127,3 +127,67 @@ Bitacora cronologica de desarrollo. Append-only.
 **Siguiente paso**:
 - Fase 8 (despliegue): diferida. Requiere INSTALL_PATH del PM en el servidor.
 - Pruebas funcionales con el usuario sobre el .exe generado.
+
+---
+
+## [2026-04-22 ~15:00] — Sesión UI: diseño Stitch, temas claro/oscuro y lógica especial de proyectos
+
+**Commits**: (ver hash tras push)
+
+### Cambios aplicados
+
+#### 1. Sistema de diseño dual (claro / oscuro) — Stitch spec
+
+- **`src/ui/styles.py`** — reescritura completa:
+  - Dos paletas `C_LIGHT` / `C_DARK` con los tokens exactos del diseño Stitch/Aqualia.
+  - Colores de estado: OK `#22C55E` · REGULAR `#F59E0B` · CRÍTICO `#EF4444` · SIN DATOS `#94A3B8`.
+  - Accent corporativo Aqualia: `#005791` (claro) / `#9dcaff` (oscuro).
+  - CSS custom properties (`:root` claro, `body.dd-dark` oscuro): todos los componentes usan `var(--dd-*)` — sin hex hardcoded en las reglas CSS.
+  - Dos templates Plotly registrados: `aqualia_light` y `aqualia_dark`.
+  - `inject_css(dark)` actualiza `C` en-lugar + inyecta CSS + añade clase `dd-dark`/`dd-light` al body via JS.
+  - Fuente principal: **Inter** (antes Space Grotesk). Mono: JetBrains Mono sin cambios.
+  - Tarjetas de proyecto: borde izquierdo de 4px con color de estado (además del anillo SVG).
+
+- **`.streamlit/config.toml`**: base `"light"`, colores del tema claro, `primaryColor = "#005791"`.
+
+- **`app.py`**: toggle "Tema oscuro" en sidebar. Al cambiar llama `st.rerun()`. `inject_css(dark)` y `apply_plotly_theme(dark)` reciben el estado.
+
+- **Views**: headers usan `var(--dd-text)` / `var(--dd-text3)` en lugar de `C["text"]` interpolado.
+
+- **`daily_ops.py` / `project_detail.py`**: eliminados `_STATUS_COLORS` y `_ESTADO_COLORS` a nivel de módulo (se capturaban en import-time, no reflejaban cambio de tema). Colores computados inline en cada función de chart, leyendo `C` en runtime.
+
+#### 2. Lógica especial por proyecto — `src/domain/project_status.py`
+
+- **AqualiaTPL** (ejecución diaria diferida):
+  - Procesa datos D-1; el registro llega a BD entre las 13:00 y 15:00 del día D.
+  - Solución: `inactivity_hours=48` en lugar de 24. Evita falsa alerta "sin datos" durante la mañana del día D mientras el registro de D-1 sigue siendo el más reciente.
+  - El registro de D llega de forma natural (~15:00) y pasa a ser el evaluado automáticamente.
+
+- **Aqualia_GIS** (ejecución mensual, días 6-10):
+  - Nueva función `_compute_gis_health(df_gis, now)`.
+  - Lógica: si ejecutó en la ventana 6-10 del mes relevante → OK; si estamos en días 6-10 y no ha ejecutado aún → REGULAR (pendiente, no crítico); si la ventana ya cerró sin ejecución → CRÍTICO.
+  - Mes relevante: mes actual si `día >= 6`, mes anterior si `día < 6`.
+  - `get_all_project_health` acepta nuevo parámetro `df_gis: pd.DataFrame | None`.
+  - `overview.py` carga `_load_gis(repo)` via `get_executions_by_project("Aqualia_GIS")` y lo pasa.
+
+#### 3. Mejoras UI previas (misma sesión, antes del push)
+
+- **Gráfico resumen**: reemplazado trend de % OK por stacked bar por estado (OK/REGULAR/CRÍTICO) por día, con tabs 7d/30d/90d. Altura 400px.
+- **Columnas igual altura**: CSS flex en `[data-testid="stHorizontalBlock"]` + `.dd .panel { height: 100% }`.
+- **Full-width**: `.block-container { max-width: 100% !important }`.
+- **Hot reload**: `fileWatcherType = "auto"` en config.toml. `run.bat` fijado a puerto 9000.
+- **Doble cabecera corregida**: `attention_items_html()` ya genera panel completo; se eliminó el wrapper `panel_html()` que duplicaba el header.
+
+### Decisiones técnicas relevantes
+
+- **CSS variables vs hex hardcoded**: elegido CSS variables para que el mismo HTML generado sirva para ambos temas. Solo Plotly (que necesita hex reales) usa el dict `C` de Python.
+- **`inject_css(dark)` actualiza `C` en-lugar**: las funciones de chart que leen `C["ok"]` en runtime (no en import-time) obtienen el color correcto del tema activo. El dict `C` es el dict mutable compartido (`dict(C_LIGHT)` por defecto).
+- **base = "light"**: el tema Stitch es primariamente claro. Para oscuro, se añaden overrides `body.dd-dark *` sobre la base light de Streamlit.
+
+### Pendiente / a revisar mañana
+
+- [ ] Verificar visualmente que el toggle oscuro/claro funciona bien en todos los views (tarjetas, gráficos Plotly, widgets nativos de Streamlit).
+- [ ] Comprobar que Aqualia_GIS muestra REGULAR cuando estamos en días 6-10 sin ejecución (simular con fecha de test).
+- [ ] Revisar si `body.dd-dark` overrides cubren todos los widgets Streamlit (selectbox, date_input, slider) — puede haber widgets con estilos light residuales.
+- [ ] Evaluar si añadir una barra de estado en el sidebar (última actualización, modo de datos: Excel/SQL).
+- [ ] Fase 8 (despliegue) sigue diferida — requiere INSTALL_PATH del PM.

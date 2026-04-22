@@ -6,4 +6,12 @@ gatherUsageStats = false
 
 [server]
 headless = true
-fileWatcherType = "none"
+fileWatcherType = "auto"
+
+[theme]
+base = "light"
+backgroundColor = "#f8f9ff"
+secondaryBackgroundColor = "#f1f3fa"
+textColor = "#1e293b"
+primaryColor = "#005791"
+font = "sans serif"
