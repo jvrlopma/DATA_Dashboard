@@ -7,12 +7,13 @@ Visualiza el estado de los 8 proyectos ETL a partir de la tabla `PWC_Monitorizac
 
 ## Fase actual
 
-**Fase 0 — Bootstrap del repo** (completada 2026-04-22)
+**Fase 5 — Vista 3 Operativa diaria** (completada 2026-04-22)
 
-Siguiente: **Fase 1 — Capa de datos (Excel)**
-- Definir `BaseRepository` e implementar `ExcelRepository`.
-- Tests unitarios del repositorio.
-- Colocar el Excel real en `data/`.
+Siguiente: **Fase 6 — Seguridad + capa SQL Server**
+- Implementar `SqlServerRepository` con pyodbc + SQLAlchemy.
+- Scripts `generate_key.py` y `encrypt_credentials.py`.
+- `docs/SECURITY.md` con manual paso a paso.
+- Requiere instalar ODBC Driver 18 for SQL Server.
 
 ## Ruta de desarrollo
 
@@ -58,11 +59,11 @@ Para cambiar de fuente: editar la variable de entorno `DATA_SOURCE` (`excel` | `
 
 - [x] Fase -1 — Preflight (entorno verificado)
 - [x] Fase 0  — Bootstrap del repo
-- [ ] Fase 1  — Capa de datos (Excel)
-- [ ] Fase 2  — Dominio (modelos + logica de estado)
-- [ ] Fase 3  — UI base + Vista 1 (Resumen global)
-- [ ] Fase 4  — Vista 2 (Detalle por proyecto)
-- [ ] Fase 5  — Vista 3 (Operativa diaria)
+- [x] Fase 1  — Capa de datos (Excel)
+- [x] Fase 2  — Dominio (modelos + logica de estado)
+- [x] Fase 3  — UI base + Vista 1 (Resumen global)
+- [x] Fase 4  — Vista 2 (Detalle por proyecto)
+- [x] Fase 5  — Vista 3 (Operativa diaria)
 - [ ] Fase 6  — Seguridad + capa SQL Server
 - [ ] Fase 7  — Empaquetado con PyInstaller (onedir)
 - [ ] Fase 8  — Despliegue en Windows Server

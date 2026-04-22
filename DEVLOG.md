@@ -49,3 +49,28 @@ Bitacora cronologica de desarrollo. Append-only.
 
 **Siguiente paso**:
 - Fase 1: Implementar `BaseRepository` y `ExcelRepository`, tests unitarios, colocar Excel real en `data/`.
+
+---
+
+## [2026-04-22 10:30] — Fases 1-5: capa de datos, dominio y las 3 vistas UI
+
+**Fase**: 1-5
+**Commits**: 9fa6070 (F1), 3ceff0d (F2), 795da14 (F3), 6ceb796 (F4), (F5 en curso)
+
+**Que se ha hecho**:
+- Fase 1: `BaseRepository`, `ExcelRepository`, `factory.py`, `date_utils.py`. 26 tests.
+- Fase 2: modelos `Execution`/`ProjectHealth`, logica pura `compute_status()` y `compute_project_health()`. 81 tests totales cubriendo todos los limites del spec.
+- Fase 3: `app.py` con navegacion Streamlit, Vista 1 (tarjetas KPI accesibles, listado de atencion, grafico de evolucion con tabs 7/30/90 dias).
+- Fase 4: Vista 2 con selector de proyecto, filtros de fecha y estado, panel de ultima ejecucion desglosada, 3 graficos Plotly, tabla historica.
+- Fase 5: Vista 3 con Gantt real (dFech_Ini_Carga / dFech_Fin_Carga), KPIs del dia, tabla de inactividad con umbral configurable (slider).
+
+**Decisiones tecnicas relevantes**:
+- El Gantt usa `px.timeline` con duraciones reales de carga; fallback a scatter si faltan timestamps.
+- La deteccion de inactividad compara `datetime.now()` con la ultima ejecucion de cada proyecto en todo el dataset (no solo en el dia seleccionado).
+- Telemetria de Streamlit desactivada via variable de entorno y flag CLI.
+
+**Problemas encontrados / a revisar**:
+- El alias `python` de MS Store sigue teniendo prioridad sobre Python311 en nuevas sesiones de PowerShell. Workaround: se prefixa Python311 al PATH en cada sesion. Pendiente de resolver definitivamente (requiere admin para HKLM).
+
+**Siguiente paso**:
+- Fase 6: SqlServerRepository, scripts de cifrado de credenciales, SECURITY.md. Requiere instalar ODBC Driver 18.
