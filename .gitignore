@@ -1,0 +1,51 @@
+# Entorno virtual
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Build / dist (PyInstaller)
+build/
+dist/
+*.spec
+# Excepcion: el .spec custom SÍ se versiona
+!DATA_Dashboard.spec
+
+# Secretos y credenciales (NUNCA en el repo)
+.env
+secrets.key
+credentials.enc
+*.enc
+*.key
+
+# Informe de preflight (generado localmente)
+preflight_report.md
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Ruff / black
+.ruff_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Logs
+*.log
+logs/
