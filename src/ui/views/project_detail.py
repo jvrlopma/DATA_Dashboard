@@ -11,7 +11,7 @@ from src.core.data_access.base_repository import BaseRepository
 from src.domain.models import ProjectStatus
 from src.domain.project_status import compute_project_health, execution_from_row
 from src.utils.date_utils import int_to_date
-from src.ui.styles import C, mini_stat_html, badge_html
+from src.ui.styles import C, mini_stat_html, section_title_html
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -172,42 +172,48 @@ def _panel_ultima_ejecucion(row: pd.Series) -> None:
 
     xok = row["xEjecutadosOK"]
     err_proc = int(row["nErrorProc"])
-    css_xok = "dd-mini-stat-ok" if xok >= 90 else ("dd-mini-stat-warn" if xok >= 80 else "dd-mini-stat-crit")
-    css_err  = "dd-mini-stat-crit" if err_proc > 0 else ""
+    ck_xok = "ok" if xok >= 90 else ("warn" if xok >= 80 else "crit")
+    ck_err  = "crit" if err_proc > 0 else ""
 
     proc_html = (
         mini_stat_html("En espera", int(row["nEsperaProc"]))
         + mini_stat_html("En ejecución", int(row["nEnEjecucionProc"]))
-        + mini_stat_html("Con error", err_proc, css_err)
+        + mini_stat_html("Con error", err_proc, ck_err)
         + mini_stat_html("Ejec. OK", int(row["nEjecutadosOkProc"]))
-        + mini_stat_html("% OK", f"{xok:.1f} %", css_xok)
+        + mini_stat_html("% OK", f"{xok:.1f} %", ck_xok)
     )
     inst_html = (
         mini_stat_html("En espera", int(row["nEsperaInst"]))
         + mini_stat_html("En ejecución", int(row["nEnEjecucionInst"]))
         + mini_stat_html("Con error", int(row["nErrorInst"]),
-                         "dd-mini-stat-crit" if row["nErrorInst"] > 0 else "")
+                         "crit" if row["nErrorInst"] > 0 else "")
         + mini_stat_html("Ejec. OK", int(row["nEjecutadosOkInst"]))
     )
 
+    from src.ui.styles import C, section_title_html
+    body = (
+        section_title_html("Procesos")
+        + f'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;'
+          f'background:{C["divider"]};border:1px solid {C["border"]};'
+          f'border-radius:8px;overflow:hidden;margin-bottom:16px">'
+        + proc_html + '</div>'
+        + section_title_html("Instalaciones")
+        + f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;'
+          f'background:{C["divider"]};border:1px solid {C["border"]};'
+          f'border-radius:8px;overflow:hidden">'
+        + inst_html + '</div>'
+    )
     st.markdown(
-        f"""
-<div class="dd-panel" style="margin-bottom:16px">
-  <div class="dd-panel-header">
-    <span class="dd-panel-title">Última ejecución — desglose</span>
-    <span class="dd-panel-sub">{fecha_str} · {hora:02d}:{minuto:02d}</span>
-  </div>
-  <div class="dd-panel-body">
-    <p class="dd-section-title" style="margin-bottom:8px">Procesos</p>
-    <div class="dd-mini-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
-      {proc_html}
-    </div>
-    <p class="dd-section-title" style="margin-bottom:8px">Instalaciones</p>
-    <div class="dd-mini-grid" style="grid-template-columns:repeat(4,1fr)">
-      {inst_html}
-    </div>
-  </div>
-</div>""",
+        f'<div style="background:{C["surface"]};border:1px solid {C["border"]};'
+        f'border-radius:10px;overflow:hidden;margin-bottom:16px">'
+        f'<div style="padding:12px 16px;border-bottom:1px solid {C["divider"]};'
+        f'display:flex;align-items:center;gap:12px">'
+        f'<span style="font-size:13px;font-weight:600;color:{C["text"]}">Última ejecución — desglose</span>'
+        f'<span style="font-size:11px;font-family:\'JetBrains Mono\',monospace;'
+        f'color:{C["text3"]}">{fecha_str} · {hora:02d}:{minuto:02d}</span>'
+        f'</div>'
+        f'<div style="padding:16px">{body}</div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 

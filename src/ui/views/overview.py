@@ -13,7 +13,7 @@ from src.domain.project_status import (
     compute_project_health,
     get_all_project_health,
 )
-from src.ui.styles import C, badge_html, kpi_strip_html, project_card_html, attention_item_html
+from src.ui.styles import C, badge_html, kpi_strip_html, project_card_html, attention_item_html, section_title_html, panel_html
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -99,12 +99,11 @@ def render(repo: BaseRepository) -> None:
 
     # --- KPI strip ---
     st.markdown(kpi_strip_html(len(ALL_PROJECTS), col_ok, col_warn, col_crit), unsafe_allow_html=True)
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-    # --- Section header ---
-    st.markdown('<p class="dd-section-title">Estado por proyecto</p>', unsafe_allow_html=True)
+    # --- Section: Estado por proyecto ---
+    from src.domain.models import PROYECTOS_GRUPO_A
+    st.markdown(section_title_html("Estado por pipeline"), unsafe_allow_html=True)
 
-    # --- Grid de tarjetas (4 columnas) ---
     sorted_healths = sorted(healths, key=lambda h: h.proyecto)
     cols = st.columns(4)
     for i, health in enumerate(sorted_healths):
@@ -112,12 +111,13 @@ def render(repo: BaseRepository) -> None:
             health.ultima_ejecucion.strftime("%d/%m %H:%M")
             if health.ultima_ejecucion else "Sin datos"
         )
+        estado_val = health.estado.value if hasattr(health.estado, "value") else str(health.estado)
         with cols[i % 4]:
             st.markdown(
                 project_card_html(
                     proyecto=health.proyecto,
-                    grupo="A" if health.proyecto in __import__("src.domain.models", fromlist=["PROYECTOS_GRUPO_A"]).PROYECTOS_GRUPO_A else "B",
-                    estado=health.estado.value if hasattr(health.estado, "value") else str(health.estado),
+                    grupo="A" if health.proyecto in PROYECTOS_GRUPO_A else "B",
+                    estado=estado_val,
                     sin_datos=health.sin_datos_recientes,
                     xok=health.xEjecutadosOK,
                     dt_str=dt_str,
@@ -125,12 +125,10 @@ def render(repo: BaseRepository) -> None:
                 unsafe_allow_html=True,
             )
 
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
     # --- Proyectos que requieren atencion ---
     problemas = [h for h in healths if h.sin_datos_recientes or h.estado != ProjectStatus.OK]
     if problemas:
-        st.markdown('<p class="dd-section-title">Proyectos que requieren atención</p>', unsafe_allow_html=True)
+        st.markdown(section_title_html("Requieren atención"), unsafe_allow_html=True)
         items_html = ""
         for h in problemas:
             estado_val = h.estado.value if hasattr(h.estado, "value") else str(h.estado)
@@ -142,16 +140,15 @@ def render(repo: BaseRepository) -> None:
             )
             items_html += attention_item_html(bdg, h.proyecto, f"% OK: {xok_str}", dt_str)
         st.markdown(
-            f'<div class="dd-panel"><div class="dd-panel-body-nopad">{items_html}</div></div>',
+            panel_html("Proyectos que requieren atención",
+                       f"{len(problemas)} proyectos", items_html, no_pad=True),
             unsafe_allow_html=True,
         )
     else:
         st.success("Todos los proyectos están en estado OK.")
 
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
     # --- Grafico de evolucion ---
-    st.markdown('<p class="dd-section-title">Evolución del % OK</p>', unsafe_allow_html=True)
+    st.markdown(section_title_html("Evolución del % OK"), unsafe_allow_html=True)
     tab7, tab30, tab90 = st.tabs(["Últimos 7 días", "Últimos 30 días", "Últimos 90 días"])
     df_all = _load_all(repo)
 

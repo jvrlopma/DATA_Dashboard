@@ -10,7 +10,7 @@ import streamlit as st
 from src.core.data_access.base_repository import BaseRepository
 from src.domain.models import ALL_PROJECTS, PROYECTOS_GRUPO_A
 from src.utils.date_utils import int_to_date
-from src.ui.styles import C
+from src.ui.styles import C, day_kpis_html, section_title_html
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -227,7 +227,7 @@ def render(repo: BaseRepository) -> None:
     # --- Datos del dia seleccionado ---
     df_dia = _load_range(repo, fecha_sel, fecha_sel)
 
-    st.markdown(f'<p class="dd-section-title">Timeline — {fecha_sel.strftime("%d/%m/%Y")}</p>', unsafe_allow_html=True)
+    st.markdown(section_title_html(f"Timeline — {fecha_sel.strftime('%d/%m/%Y')}"), unsafe_allow_html=True)
 
     if df_dia.empty:
         st.warning(f"No hay ejecuciones registradas el {fecha_sel.strftime('%d/%m/%Y')}.")
@@ -235,26 +235,12 @@ def render(repo: BaseRepository) -> None:
         df_dia = _enrich(df_dia)
 
         # KPIs del dia
-        st.markdown(f"""
-<div class="dd-day-kpis">
-  <div class="dd-day-kpi">
-    <div class="dd-day-kpi-label">Ejecuciones</div>
-    <div class="dd-day-kpi-value">{len(df_dia):,}</div>
-  </div>
-  <div class="dd-day-kpi">
-    <div class="dd-day-kpi-label">Proyectos activos</div>
-    <div class="dd-day-kpi-value">{df_dia["proyecto"].nunique()}</div>
-  </div>
-  <div class="dd-day-kpi">
-    <div class="dd-day-kpi-label">% OK medio</div>
-    <div class="dd-day-kpi-value">{df_dia["xEjecutadosOK"].mean():.1f}<span style="font-size:14px;font-weight:500;color:var(--dd-text-3)"> %</span></div>
-  </div>
-  <div class="dd-day-kpi">
-    <div class="dd-day-kpi-label">Total procesos</div>
-    <div class="dd-day-kpi-value">{df_dia["nTotalEjecuciones"].sum():,}</div>
-  </div>
-</div>
-<div style="height:12px"></div>""", unsafe_allow_html=True)
+        st.markdown(day_kpis_html(
+            len(df_dia),
+            df_dia["proyecto"].nunique(),
+            df_dia["xEjecutadosOK"].mean(),
+            int(df_dia["nTotalEjecuciones"].sum()),
+        ), unsafe_allow_html=True)
 
         # Gantt
         st.plotly_chart(_gantt(df_dia, fecha_sel), use_container_width=True)
@@ -284,7 +270,7 @@ def render(repo: BaseRepository) -> None:
     st.divider()
 
     # --- Deteccion de inactividad ---
-    st.markdown(f'<p class="dd-section-title">Detección de inactividad (umbral: {umbral_h} h)</p>', unsafe_allow_html=True)
+    st.markdown(section_title_html(f"Detección de inactividad — umbral: {umbral_h} h"), unsafe_allow_html=True)
     tabla_act = _tabla_inactividad(df_all, now, umbral_h)
 
     inactivos = tabla_act[tabla_act["Estado actividad"].str.startswith("❌")]
