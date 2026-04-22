@@ -4,6 +4,35 @@ Manual de operación para el PM de DATA (sin conocimientos de desarrollo requeri
 
 ---
 
+## ⚠️ Ficheros sensibles excluidos del repositorio Git
+
+Los ficheros siguientes **jamás deben subirse a GitHub**. No están en el repositorio y el `.gitignore` los bloquea activamente, pero es responsabilidad del equipo mantenerlos fuera y gestionarlos de forma segura.
+
+| Fichero | Qué contiene | Estado en Git |
+|---|---|---|
+| `secrets.key` | Clave Fernet de 32 bytes (descifra las credenciales) | Excluido — `.gitignore` |
+| `credentials.enc` | JSON cifrado con servidor, BD, usuario y contraseña SQL Server | Excluido — `.gitignore` |
+| `data/PWC_Monitorizacion_CdM.xlsx` | Datos de monitorización ETL (datos de negocio) | Excluido — `.gitignore` |
+| `.env` | Variables de entorno locales (si se usaran) | Excluido — `.gitignore` |
+
+### Qué hacer si alguien accidentalmente sube uno de estos ficheros
+
+1. **Revocar inmediatamente** la credencial comprometida (cambiar la contraseña en SQL Server o regenerar la clave).
+2. Eliminar el fichero del historial de Git con `git filter-repo` o contactar con el administrador de GitHub para purgar el commit.
+3. Generar nuevas credenciales siguiendo la sección 1 de esta guía.
+
+### Verificación rápida: ¿está mi entorno limpio?
+
+```powershell
+# Ninguno de estos comandos debe devolver resultados
+git ls-files | Select-String "\.key$|\.enc$|\.env$"
+git ls-files data/
+```
+
+Si alguno devuelve algo, ejecutar `git rm --cached <fichero>` y añadirlo al `.gitignore` antes de hacer push.
+
+---
+
 ## Resumen del modelo de seguridad
 
 Las credenciales de SQL Server **nunca** se guardan en texto plano. El flujo es:
@@ -232,3 +261,29 @@ Un arranque correcto no muestra ningún error de tipo `FileNotFoundError` ni `Va
 | `CREDENTIALS_PATH` | Ruta absoluta a `credentials.enc` | `C:\DATA_secrets\credentials.enc` |
 | `INACTIVITY_HOURS` | Umbral de inactividad en horas (default: 24) | `24` |
 | `STREAMLIT_PORT` | Puerto HTTP del dashboard (default: 8501) | `8501` |
+
+---
+
+## 9. Checklist de despliegue — ficheros fuera del repo
+
+Antes de poner el servicio en marcha en el servidor destino, confirmar que los siguientes ficheros están en su sitio **fuera del repositorio y del .exe**:
+
+```
+C:\DATA_secrets\              ← carpeta protegida (solo cuenta de servicio puede leer)
+  secrets.key                 ← generado con scripts\generate_key.py
+  credentials.enc             ← generado con scripts\encrypt_credentials.py
+
+<INSTALL_PATH>\data\          ← junto al .exe, si se usa modo Excel
+  PWC_Monitorizacion_CdM.xlsx ← exportado desde SQL Server o facilitado por el equipo DATA
+```
+
+Pasos en orden:
+
+1. **Crear la carpeta de secretos** y restringir permisos NTFS (ver sección 3).
+2. **Generar `secrets.key`** en el servidor (sección 1.2). Guardar copia en gestor de contraseñas corporativo.
+3. **Cifrar credenciales** con `encrypt_credentials.py` (sección 1.3).
+4. **Copiar el Excel** a `<INSTALL_PATH>\data\` si el servicio arranca en modo `DATA_SOURCE=excel`.
+5. **Configurar variables de entorno** en el servicio NSSM (sección 2).
+6. **Verificar arranque** revisando los logs (sección 7).
+
+> Ninguno de estos ficheros debe estar en el repositorio Git ni en el `.zip` de release generado por `scripts\package_release.ps1`. El `.zip` solo contiene código y dependencias.
