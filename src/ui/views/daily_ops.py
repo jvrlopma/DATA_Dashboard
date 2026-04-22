@@ -10,6 +10,7 @@ import streamlit as st
 from src.core.data_access.base_repository import BaseRepository
 from src.domain.models import ALL_PROJECTS, PROYECTOS_GRUPO_A
 from src.utils.date_utils import int_to_date
+from src.ui.styles import C
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -25,7 +26,7 @@ def _load_range(_repo, start, end):
 # Helpers
 # ---------------------------------------------------------------------------
 
-_STATUS_COLORS   = {"OK": "#28a745", "REGULAR": "#ffc107", "CRITICO": "#dc3545"}
+_STATUS_COLORS   = {"OK": C["ok"], "REGULAR": C["warn"], "CRITICO": C["crit"]}
 _STATUS_ICONS    = {"OK": "✅", "REGULAR": "⚠️", "CRITICO": "❌"}
 _STATUS_PATTERNS = {"OK": "", "REGULAR": "/", "CRITICO": "x"}
 
@@ -108,8 +109,9 @@ def _gantt(df: pd.DataFrame, fecha_sel: date) -> go.Figure:
         plot_bgcolor="white",
         paper_bgcolor="white",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        xaxis_title="Hora del dia",
+        xaxis_title="Hora del día",
         yaxis_title="",
+        font=dict(family="Space Grotesk, sans-serif", size=12),
     )
     return fig
 
@@ -137,11 +139,12 @@ def _gantt_puntos(df: pd.DataFrame, fecha_sel: date) -> go.Figure:
         ))
     fig.update_layout(
         xaxis=dict(range=[0, 24], dtick=2, tickformat="%H:00",
-                   title="Hora del dia", gridcolor="#eee"),
-        yaxis=dict(title="", gridcolor="#eee", categoryorder="category ascending"),
+                   title="Hora del día", gridcolor=C["grid"]),
+        yaxis=dict(title="", gridcolor=C["grid"], categoryorder="category ascending"),
         height=320, plot_bgcolor="white", paper_bgcolor="white",
         margin=dict(l=0, r=10, t=10, b=0),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        font=dict(family="Space Grotesk, sans-serif", size=12),
     )
     return fig
 
@@ -199,7 +202,7 @@ def _tabla_inactividad(df_all: pd.DataFrame, now: datetime, umbral_h: int) -> pd
 
 def render(repo: BaseRepository) -> None:
     """Renderiza la Vista 3 — Operativa diaria."""
-    st.title("Operativa diaria")
+    st.markdown('<h2 style="margin-bottom:4px;font-size:20px;font-weight:600">Operativa diaria</h2>', unsafe_allow_html=True)
 
     df_all = _load_all(repo)
     fecha_max = int_to_date(int(df_all["nFecha_ejecucion"].max()))
@@ -224,7 +227,7 @@ def render(repo: BaseRepository) -> None:
     # --- Datos del dia seleccionado ---
     df_dia = _load_range(repo, fecha_sel, fecha_sel)
 
-    st.subheader(f"Timeline — {fecha_sel.strftime('%d/%m/%Y')}")
+    st.markdown(f'<p class="dd-section-title">Timeline — {fecha_sel.strftime("%d/%m/%Y")}</p>', unsafe_allow_html=True)
 
     if df_dia.empty:
         st.warning(f"No hay ejecuciones registradas el {fecha_sel.strftime('%d/%m/%Y')}.")
@@ -232,11 +235,26 @@ def render(repo: BaseRepository) -> None:
         df_dia = _enrich(df_dia)
 
         # KPIs del dia
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Ejecuciones", len(df_dia))
-        k2.metric("Proyectos activos", df_dia["proyecto"].nunique())
-        k3.metric("% OK medio", f"{df_dia['xEjecutadosOK'].mean():.1f} %")
-        k4.metric("Total procesos", f"{df_dia['nTotalEjecuciones'].sum():,}")
+        st.markdown(f"""
+<div class="dd-day-kpis">
+  <div class="dd-day-kpi">
+    <div class="dd-day-kpi-label">Ejecuciones</div>
+    <div class="dd-day-kpi-value">{len(df_dia):,}</div>
+  </div>
+  <div class="dd-day-kpi">
+    <div class="dd-day-kpi-label">Proyectos activos</div>
+    <div class="dd-day-kpi-value">{df_dia["proyecto"].nunique()}</div>
+  </div>
+  <div class="dd-day-kpi">
+    <div class="dd-day-kpi-label">% OK medio</div>
+    <div class="dd-day-kpi-value">{df_dia["xEjecutadosOK"].mean():.1f}<span style="font-size:14px;font-weight:500;color:var(--dd-text-3)"> %</span></div>
+  </div>
+  <div class="dd-day-kpi">
+    <div class="dd-day-kpi-label">Total procesos</div>
+    <div class="dd-day-kpi-value">{df_dia["nTotalEjecuciones"].sum():,}</div>
+  </div>
+</div>
+<div style="height:12px"></div>""", unsafe_allow_html=True)
 
         # Gantt
         st.plotly_chart(_gantt(df_dia, fecha_sel), use_container_width=True)
@@ -266,7 +284,7 @@ def render(repo: BaseRepository) -> None:
     st.divider()
 
     # --- Deteccion de inactividad ---
-    st.subheader(f"Deteccion de inactividad (umbral: {umbral_h} h)")
+    st.markdown(f'<p class="dd-section-title">Detección de inactividad (umbral: {umbral_h} h)</p>', unsafe_allow_html=True)
     tabla_act = _tabla_inactividad(df_all, now, umbral_h)
 
     inactivos = tabla_act[tabla_act["Estado actividad"].str.startswith("❌")]

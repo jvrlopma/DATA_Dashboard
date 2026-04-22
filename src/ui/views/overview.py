@@ -13,8 +13,9 @@ from src.domain.project_status import (
     compute_project_health,
     get_all_project_health,
 )
+from src.ui.styles import C, badge_html, kpi_strip_html, project_card_html, attention_item_html
 
-# TTL 5 min; el prefijo _ en _repo excluye el objeto del hash de cache
+
 @st.cache_data(ttl=300, show_spinner=False)
 def _load_last(_repo):
     return _repo.get_last_execution_per_project()
@@ -24,94 +25,12 @@ def _load_last(_repo):
 def _load_all(_repo):
     return _repo.get_all_executions()
 
-# ---------------------------------------------------------------------------
-# Constantes visuales
-# ---------------------------------------------------------------------------
-
-_STATUS_CONFIG = {
-    ProjectStatus.OK: {
-        "icon": "✅",
-        "label": "OK",
-        "bg": "#d4edda",
-        "border": "#28a745",
-        "text": "#155724",
-    },
-    ProjectStatus.REGULAR: {
-        "icon": "⚠️",
-        "label": "REGULAR",
-        "bg": "#fff3cd",
-        "border": "#ffc107",
-        "text": "#856404",
-    },
-    ProjectStatus.CRITICO: {
-        "icon": "❌",
-        "label": "CRITICO",
-        "bg": "#f8d7da",
-        "border": "#dc3545",
-        "text": "#721c24",
-    },
-}
-
-_SIN_DATOS_CONFIG = {
-    "icon": "⚫",
-    "label": "Sin datos",
-    "bg": "#e2e3e5",
-    "border": "#6c757d",
-    "text": "#383d41",
-}
-
-
-def _status_cfg(health) -> dict:
-    if health.sin_datos_recientes:
-        return _SIN_DATOS_CONFIG
-    return _STATUS_CONFIG[health.estado]
-
-
-# ---------------------------------------------------------------------------
-# Componente: tarjeta KPI
-# ---------------------------------------------------------------------------
-
-def _kpi_card(health) -> str:
-    """Genera el HTML de una tarjeta KPI para un proyecto."""
-    cfg = _status_cfg(health)
-    xok_str = f"{health.xEjecutadosOK:.1f} %" if health.xEjecutadosOK is not None else "—"
-    dt_str = (
-        health.ultima_ejecucion.strftime("%d/%m/%Y %H:%M")
-        if health.ultima_ejecucion
-        else "Sin datos"
-    )
-    badge = (
-        f'<span style="font-size:1.1rem">{cfg["icon"]}</span> '
-        f'<strong style="color:{cfg["text"]}">{cfg["label"]}</strong>'
-    )
-    return f"""
-<div style="
-    background:{cfg['bg']};
-    border-left: 5px solid {cfg['border']};
-    border-radius: 8px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
-    min-height: 110px;
-">
-  <div style="font-size:0.85rem;color:#555;margin-bottom:4px;
-              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-    {health.proyecto}
-  </div>
-  <div style="margin-bottom:6px">{badge}</div>
-  <div style="font-size:1.4rem;font-weight:bold;color:{cfg['text']}">{xok_str}</div>
-  <div style="font-size:0.75rem;color:#666;margin-top:4px">
-    Ult. ejec.: {dt_str}
-  </div>
-</div>
-"""
-
 
 # ---------------------------------------------------------------------------
 # Grafico de evolucion temporal
 # ---------------------------------------------------------------------------
 
 def _trend_chart(df_all: pd.DataFrame, days: int) -> go.Figure:
-    """Genera el grafico de linea del % OK agregado en los ultimos N dias."""
     max_date = df_all["nFecha_ejecucion"].max()
     cutoff = int((
         datetime.strptime(str(max_date), "%Y%m%d") - timedelta(days=days)
@@ -134,23 +53,24 @@ def _trend_chart(df_all: pd.DataFrame, days: int) -> go.Figure:
         y=daily["xOK_medio"],
         mode="lines+markers",
         name="% OK medio",
-        line=dict(color="#28a745", width=2),
-        marker=dict(size=4),
+        line=dict(color=C["ok"], width=2),
+        marker=dict(size=4, color=C["ok"]),
         hovertemplate="%{x|%d/%m/%Y}<br>% OK: %{y:.1f}%<extra></extra>",
     ))
-    fig.add_hline(y=90, line_dash="dot", line_color="#ffc107",
+    fig.add_hline(y=90, line_dash="dot", line_color=C["warn"],
                   annotation_text="90 %", annotation_position="right")
-    fig.add_hline(y=80, line_dash="dot", line_color="#dc3545",
+    fig.add_hline(y=80, line_dash="dot", line_color=C["crit"],
                   annotation_text="80 %", annotation_position="right")
 
     fig.update_layout(
         margin=dict(l=0, r=60, t=10, b=0),
-        yaxis=dict(range=[0, 105], ticksuffix=" %", gridcolor="#eee"),
-        xaxis=dict(gridcolor="#eee"),
+        yaxis=dict(range=[0, 105], ticksuffix=" %", gridcolor=C["grid"]),
+        xaxis=dict(gridcolor=C["grid"]),
         plot_bgcolor="white",
         paper_bgcolor="white",
         height=280,
         showlegend=False,
+        font=dict(family="Space Grotesk, sans-serif", size=12),
     )
     return fig
 
@@ -161,9 +81,8 @@ def _trend_chart(df_all: pd.DataFrame, days: int) -> go.Figure:
 
 def render(repo: BaseRepository) -> None:
     """Renderiza la Vista 1 — Resumen global."""
-    st.title("Resumen global — Estado ETL")
+    st.markdown('<h2 style="margin-bottom:4px;font-size:20px;font-weight:600">Resumen global — Estado ETL</h2>', unsafe_allow_html=True)
 
-    # --- Datos ---
     df_last = _load_last(repo)
     now = datetime.now()
 
@@ -174,52 +93,66 @@ def render(repo: BaseRepository) -> None:
 
     healths = get_all_project_health(df_last, now)
 
-    # --- KPIs en cabecera ---
-    col_ok = sum(1 for h in healths if h.estado == ProjectStatus.OK and not h.sin_datos_recientes)
-    col_reg = sum(1 for h in healths if h.estado == ProjectStatus.REGULAR)
-    col_crit = sum(1 for h in healths if h.estado == ProjectStatus.CRITICO)
+    col_ok   = sum(1 for h in healths if not h.sin_datos_recientes and h.estado == ProjectStatus.OK)
+    col_warn = sum(1 for h in healths if not h.sin_datos_recientes and h.estado == ProjectStatus.REGULAR)
+    col_crit = sum(1 for h in healths if not h.sin_datos_recientes and h.estado == ProjectStatus.CRITICO)
 
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Total proyectos", len(ALL_PROJECTS))
-    k2.metric("✅ OK", col_ok)
-    k3.metric("⚠️ Regular", col_reg)
-    k4.metric("❌ Critico / Sin datos", col_crit)
+    # --- KPI strip ---
+    st.markdown(kpi_strip_html(len(ALL_PROJECTS), col_ok, col_warn, col_crit), unsafe_allow_html=True)
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-    st.divider()
+    # --- Section header ---
+    st.markdown('<p class="dd-section-title">Estado por proyecto</p>', unsafe_allow_html=True)
 
-    # --- Grid de tarjetas ---
-    st.subheader("Estado por proyecto")
+    # --- Grid de tarjetas (4 columnas) ---
+    sorted_healths = sorted(healths, key=lambda h: h.proyecto)
     cols = st.columns(4)
-    for i, health in enumerate(sorted(healths, key=lambda h: h.proyecto)):
+    for i, health in enumerate(sorted_healths):
+        dt_str = (
+            health.ultima_ejecucion.strftime("%d/%m %H:%M")
+            if health.ultima_ejecucion else "Sin datos"
+        )
         with cols[i % 4]:
-            st.markdown(_kpi_card(health), unsafe_allow_html=True)
+            st.markdown(
+                project_card_html(
+                    proyecto=health.proyecto,
+                    grupo="A" if health.proyecto in __import__("src.domain.models", fromlist=["PROYECTOS_GRUPO_A"]).PROYECTOS_GRUPO_A else "B",
+                    estado=health.estado.value if hasattr(health.estado, "value") else str(health.estado),
+                    sin_datos=health.sin_datos_recientes,
+                    xok=health.xEjecutadosOK,
+                    dt_str=dt_str,
+                ),
+                unsafe_allow_html=True,
+            )
 
-    st.divider()
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
     # --- Proyectos que requieren atencion ---
-    problemas = [h for h in healths if h.estado != ProjectStatus.OK or h.sin_datos_recientes]
+    problemas = [h for h in healths if h.sin_datos_recientes or h.estado != ProjectStatus.OK]
     if problemas:
-        st.subheader("⚠️ Proyectos que requieren atencion")
+        st.markdown('<p class="dd-section-title">Proyectos que requieren atención</p>', unsafe_allow_html=True)
+        items_html = ""
         for h in problemas:
-            cfg = _status_cfg(h)
+            estado_val = h.estado.value if hasattr(h.estado, "value") else str(h.estado)
+            bdg = badge_html(None if h.sin_datos_recientes else estado_val, h.sin_datos_recientes)
             xok_str = f"{h.xEjecutadosOK:.1f} %" if h.xEjecutadosOK is not None else "—"
             dt_str = (
                 h.ultima_ejecucion.strftime("%d/%m/%Y %H:%M")
                 if h.ultima_ejecucion else "Sin datos"
             )
-            st.markdown(
-                f"{cfg['icon']} **{h.proyecto}** — "
-                f"{h.etiqueta_estado} | % OK: {xok_str} | "
-                f"Ult. ejec.: {dt_str}"
-            )
+            items_html += attention_item_html(bdg, h.proyecto, f"% OK: {xok_str}", dt_str)
+        st.markdown(
+            f'<div class="dd-panel"><div class="dd-panel-body-nopad">{items_html}</div></div>',
+            unsafe_allow_html=True,
+        )
     else:
         st.success("Todos los proyectos están en estado OK.")
 
-    st.divider()
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
     # --- Grafico de evolucion ---
-    st.subheader("Evolucion del % OK")
-    tab7, tab30, tab90 = st.tabs(["Ultimos 7 dias", "Ultimos 30 dias", "Ultimos 90 dias"])
+    st.markdown('<p class="dd-section-title">Evolución del % OK</p>', unsafe_allow_html=True)
+    tab7, tab30, tab90 = st.tabs(["Últimos 7 días", "Últimos 30 días", "Últimos 90 días"])
     df_all = _load_all(repo)
 
     with tab7:

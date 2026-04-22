@@ -55,3 +55,6 @@ $RECYCLE.BIN/
 # Logs
 *.log
 logs/
+
+# Design bundle (solo referencia, no necesario en produccion)
+_design_bundle/

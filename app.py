@@ -6,6 +6,7 @@ Configura la pagina, carga el repositorio y enruta a la vista seleccionada.
 import streamlit as st
 
 from src.core.data_access.factory import get_repository
+from src.ui.styles import inject_css
 
 # ---------------------------------------------------------------------------
 # Configuracion de pagina (debe ser la primera llamada a Streamlit)
@@ -16,6 +17,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+inject_css()
 
 # ---------------------------------------------------------------------------
 # Carga del repositorio (cacheada para no releer el Excel en cada interaccion)
@@ -31,8 +34,14 @@ repo = load_repository()
 # ---------------------------------------------------------------------------
 # Navegacion lateral
 # ---------------------------------------------------------------------------
+import os
+
 with st.sidebar:
-    st.title("DATA Dashboard")
+    logo_path = os.path.join(os.path.dirname(__file__), "assets", "aqualia-logo.png")
+    if os.path.exists(logo_path):
+        st.image(logo_path, width=140)
+    else:
+        st.markdown("**DATA Dashboard**")
     st.caption("Departamento de DATA — Aqualia TI")
     st.divider()
 

@@ -11,6 +11,7 @@ from src.core.data_access.base_repository import BaseRepository
 from src.domain.models import ProjectStatus
 from src.domain.project_status import compute_project_health, execution_from_row
 from src.utils.date_utils import int_to_date
+from src.ui.styles import C, mini_stat_html, badge_html
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -27,9 +28,9 @@ def _load_by_project(_repo, project: str):
 # ---------------------------------------------------------------------------
 
 _ESTADO_COLORS = {
-    "OK": "#28a745",
-    "REGULAR": "#ffc107",
-    "CRITICO": "#dc3545",
+    "OK":      C["ok"],
+    "REGULAR": C["warn"],
+    "CRITICO": C["crit"],
 }
 
 # Patrones de relleno por estado (accesibilidad para daltonismo)
@@ -74,26 +75,27 @@ def _chart_evolucion(df: pd.DataFrame, proyecto: str) -> go.Figure:
     fig.add_trace(go.Scatter(
         x=daily["fecha_dt"], y=daily["xOK"],
         name="% OK", mode="lines+markers",
-        line=dict(color="#28a745", width=2), marker=dict(size=4),
+        line=dict(color=C["ok"], width=2), marker=dict(size=4, color=C["ok"]),
         hovertemplate="%{x|%d/%m/%Y}<br>% OK: %{y:.1f}%<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
         x=daily["fecha_dt"], y=daily["xErr"],
         name="% Error", mode="lines+markers",
-        line=dict(color="#dc3545", width=2, dash="dash"), marker=dict(size=4),
+        line=dict(color=C["crit"], width=2, dash="dash"), marker=dict(size=4, color=C["crit"]),
         hovertemplate="%{x|%d/%m/%Y}<br>% Error: %{y:.1f}%<extra></extra>",
     ))
-    fig.add_hline(y=90, line_dash="dot", line_color="#ffc107",
+    fig.add_hline(y=90, line_dash="dot", line_color=C["warn"],
                   annotation_text="90 %", annotation_position="right")
-    fig.add_hline(y=80, line_dash="dot", line_color="#dc3545",
+    fig.add_hline(y=80, line_dash="dot", line_color=C["crit"],
                   annotation_text="80 %", annotation_position="right")
     fig.update_layout(
-        title=f"Evolucion diaria — {proyecto}",
-        yaxis=dict(range=[0, 105], ticksuffix=" %", gridcolor="#eee"),
-        xaxis=dict(gridcolor="#eee"),
+        title=f"Evolución diaria — {proyecto}",
+        yaxis=dict(range=[0, 105], ticksuffix=" %", gridcolor=C["grid"]),
+        xaxis=dict(gridcolor=C["grid"]),
         plot_bgcolor="white", paper_bgcolor="white",
         height=300, margin=dict(l=0, r=60, t=40, b=0),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        font=dict(family="Space Grotesk, sans-serif", size=12),
     )
     return fig
 
@@ -120,11 +122,12 @@ def _chart_por_hora(df: pd.DataFrame, proyecto: str) -> go.Figure:
         customdata=hourly["xOK"],
     ))
     fig.update_layout(
-        title=f"Distribucion por hora — {proyecto}",
-        xaxis=dict(title="Hora del dia", dtick=1, gridcolor="#eee"),
-        yaxis=dict(title="N.o ejecuciones", gridcolor="#eee"),
+        title=f"Distribución por hora — {proyecto}",
+        xaxis=dict(title="Hora del día", dtick=1, gridcolor=C["grid"]),
+        yaxis=dict(title="N.º ejecuciones", gridcolor=C["grid"]),
         plot_bgcolor="white", paper_bgcolor="white",
         height=280, margin=dict(l=0, r=20, t=40, b=0),
+        font=dict(family="Space Grotesk, sans-serif", size=12),
     )
     return fig
 
@@ -142,16 +145,17 @@ def _chart_volumen(df: pd.DataFrame, proyecto: str) -> go.Figure:
     fig = go.Figure(go.Scatter(
         x=daily["fecha_dt"], y=daily["nTotalEjecuciones"],
         fill="tozeroy", mode="lines",
-        line=dict(color="#0d6efd", width=1.5),
-        fillcolor="rgba(13,110,253,0.15)",
+        line=dict(color=C["accent"], width=1.5),
+        fillcolor=C["accent"] + "26",
         hovertemplate="%{x|%d/%m/%Y}<br>Total ejecuciones: %{y:,}<extra></extra>",
     ))
     fig.update_layout(
         title=f"Volumen de ejecuciones — {proyecto}",
-        yaxis=dict(gridcolor="#eee"),
-        xaxis=dict(gridcolor="#eee"),
+        yaxis=dict(gridcolor=C["grid"]),
+        xaxis=dict(gridcolor=C["grid"]),
         plot_bgcolor="white", paper_bgcolor="white",
         height=260, margin=dict(l=0, r=20, t=40, b=0),
+        font=dict(family="Space Grotesk, sans-serif", size=12),
     )
     return fig
 
@@ -162,31 +166,50 @@ def _chart_volumen(df: pd.DataFrame, proyecto: str) -> go.Figure:
 
 def _panel_ultima_ejecucion(row: pd.Series) -> None:
     """Muestra el desglose detallado de la ultima ejecucion."""
-    st.markdown("#### Ultima ejecucion — desglose")
-
     fecha_str = _fecha_int_to_str(int(row["nFecha_ejecucion"]))
     hora = int(row["Hora_ejecucion"])
     minuto = int(row["Minuto_ejecucion"])
-    st.caption(f"Fecha: {fecha_str}  |  Hora: {hora:02d}:{minuto:02d}")
 
-    st.markdown("**Procesos**")
-    p1, p2, p3, p4, p5 = st.columns(5)
-    p1.metric("En espera", int(row["nEsperaProc"]))
-    p2.metric("En ejecucion", int(row["nEnEjecucionProc"]))
-    p3.metric("Con error", int(row["nErrorProc"]),
-              delta=None if row["nErrorProc"] == 0 else f"-{int(row['nErrorProc'])}",
-              delta_color="inverse")
-    p4.metric("Ejecutados OK", int(row["nEjecutadosOkProc"]))
-    p5.metric("% OK", f"{row['xEjecutadosOK']:.1f} %")
+    xok = row["xEjecutadosOK"]
+    err_proc = int(row["nErrorProc"])
+    css_xok = "dd-mini-stat-ok" if xok >= 90 else ("dd-mini-stat-warn" if xok >= 80 else "dd-mini-stat-crit")
+    css_err  = "dd-mini-stat-crit" if err_proc > 0 else ""
 
-    st.markdown("**Instalaciones**")
-    i1, i2, i3, i4 = st.columns(4)
-    i1.metric("En espera", int(row["nEsperaInst"]))
-    i2.metric("En ejecucion", int(row["nEnEjecucionInst"]))
-    i3.metric("Con error", int(row["nErrorInst"]),
-              delta=None if row["nErrorInst"] == 0 else f"-{int(row['nErrorInst'])}",
-              delta_color="inverse")
-    i4.metric("Ejecutadas OK", int(row["nEjecutadosOkInst"]))
+    proc_html = (
+        mini_stat_html("En espera", int(row["nEsperaProc"]))
+        + mini_stat_html("En ejecución", int(row["nEnEjecucionProc"]))
+        + mini_stat_html("Con error", err_proc, css_err)
+        + mini_stat_html("Ejec. OK", int(row["nEjecutadosOkProc"]))
+        + mini_stat_html("% OK", f"{xok:.1f} %", css_xok)
+    )
+    inst_html = (
+        mini_stat_html("En espera", int(row["nEsperaInst"]))
+        + mini_stat_html("En ejecución", int(row["nEnEjecucionInst"]))
+        + mini_stat_html("Con error", int(row["nErrorInst"]),
+                         "dd-mini-stat-crit" if row["nErrorInst"] > 0 else "")
+        + mini_stat_html("Ejec. OK", int(row["nEjecutadosOkInst"]))
+    )
+
+    st.markdown(
+        f"""
+<div class="dd-panel" style="margin-bottom:16px">
+  <div class="dd-panel-header">
+    <span class="dd-panel-title">Última ejecución — desglose</span>
+    <span class="dd-panel-sub">{fecha_str} · {hora:02d}:{minuto:02d}</span>
+  </div>
+  <div class="dd-panel-body">
+    <p class="dd-section-title" style="margin-bottom:8px">Procesos</p>
+    <div class="dd-mini-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
+      {proc_html}
+    </div>
+    <p class="dd-section-title" style="margin-bottom:8px">Instalaciones</p>
+    <div class="dd-mini-grid" style="grid-template-columns:repeat(4,1fr)">
+      {inst_html}
+    </div>
+  </div>
+</div>""",
+        unsafe_allow_html=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +218,7 @@ def _panel_ultima_ejecucion(row: pd.Series) -> None:
 
 def render(repo: BaseRepository) -> None:
     """Renderiza la Vista 2 — Detalle por proyecto."""
-    st.title("Detalle por proyecto")
+    st.markdown('<h2 style="margin-bottom:4px;font-size:20px;font-weight:600">Detalle por proyecto</h2>', unsafe_allow_html=True)
 
     proyectos = _load_projects(repo)
     if not proyectos:
