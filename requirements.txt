@@ -24,3 +24,6 @@ pytest==9.0.3
 # --- Calidad de codigo ---
 ruff==0.15.11
 black==26.3.1
+
+# --- Empaquetado (Fase 7) ---
+pyinstaller==6.11.1
