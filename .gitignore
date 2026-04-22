@@ -23,6 +23,12 @@ credentials.enc
 *.enc
 *.key
 
+# Datos de negocio (NUNCA en el repo)
+data/*.xlsx
+data/*.xls
+data/*.csv
+data/*.mdb
+
 # Informe de preflight (generado localmente)
 preflight_report.md
 
